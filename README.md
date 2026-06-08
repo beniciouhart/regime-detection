@@ -1,2 +1,2 @@
 # regime-detection
-Regime Detection + VaR and CVaR using WTI, Brent, 10Y - 2Y  yield spreads, DIX, and VIX (at least initially).
+Regime Detection + VaR and CVaR using WTI, Brent (Portfolio), 10Y - 2Y  yield spreads, DXY, and VIX (To inform the model).

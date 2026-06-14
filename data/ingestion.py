@@ -102,10 +102,22 @@ def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pullin
     return df_wide
 
 def get_merged_df(eia_spot_pet_df=fetch_eia_series_pet(), eia_spot_gas_df=fetch_eia_series_gas(), eia_stock_df=fetch_eia_stock(),fred_df=fetch_fred_series()):
+    # Get and merge eia and fred data
     df = pd.merge(left=eia_spot_pet_df, right=fred_df,left_index = True, right_index = True, how= 'inner')
     df = pd.merge(left=df, right=eia_stock_df, left_index = True, right_index = True, how = 'inner')
     df = pd.merge(left=df, right= eia_spot_gas_df, left_index = True, right_index = True, how = 'inner' )
-    return df
+    df = df.copy().reset_index().sort_values('period')
 
+    # Get and merge opec meeting dates, and the time since a meeting (these are big events for the market)
+        
+    opec_dates = pd.read_csv('data/meetings.csv', parse_dates=['date']).sort_values('date')
+    
+    df = pd.merge_asof(df, opec_dates.assign(last_opec=opec_dates['date']),
+                    left_on='period', right_on='date', direction='backward') #merge_asof used for timeseries data where the dates don't match, finds the closest date in the rightmost df and returns that value for all rows matches, here we use backward to get the most recent date, forward would get the soonest.
+    
+    df['days_since_opec'] = (df['period'] - df['last_opec']).dt.days
+    df = df.drop(columns=['date', 'last_opec'])
+    
+    return df.set_index('period')
 
 

@@ -7,7 +7,7 @@ from fredapi import Fred
 
 load_dotenv()
 
-def fetch_eia_series(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pulling (Brent, WTI)
+def fetch_eia_series_pet(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pulling (Brent, WTI)
                           frequency= 'weekly',# Frequency of the spot prices, either daily, weekly, or monthly.
                             length = 5000 # Timespan that we're pulling, max 5000 weeks
                             ):
@@ -77,9 +77,34 @@ def fetch_eia_stock(series_ids=['WCESTUS1'], # ID's of series we're pulling (Wee
     df_wide = df_wide.dropna()
     return df_wide
 
-def get_merged_df(eia_spot_df=fetch_eia_series(), eia_stock_df=fetch_eia_stock(),fred_df=fetch_fred_series()):
-    df = pd.merge(left=eia_spot_df, right=fred_df,left_index = True, right_index = True, how= 'inner')
+def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pulling (Henry Hub)
+                         frequency= 'weekly', # Frequency of the spot prices, either daily, weekly, or monthly.
+                         length = 5000): # Timespan that we're pulling, max 5000 weeks
+    load_dotenv()
+    EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
+
+    def series_line(series_ids) -> str: # Build the text used to specify what series we want
+        text = [f"&facets[series][]={id}" for id in series_ids]
+        return ''.join(text)
+    
+
+    URL_BASE = f"https://api.eia.gov/v2/natural-gas/pri/fut/data/?api_key={EIA_API_KEY}&frequency={frequency}&data[0]=value{series_line(series_ids)}&sort[0][column]=period&sort[0][direction]=desc&length={length}"
+    response = requests.get(url= URL_BASE) # Make request to EIA API
+    data = response.json()
+
+    df = pd.DataFrame(data['response']['data']).sort_index(ascending= False)
+    df['period'] = pd.to_datetime(df['period']) # Clean the period to datetime type
+    df['value'] = pd.to_numeric(df['value'], errors= 'coerce') # Clean the value (spot price) to numeric
+    df = df[['period', 'value', 'series']]
+
+    df_wide = df.pivot(index='period', columns = 'series', values= 'value') # Create into pivot table
+    df_wide = df_wide.dropna()
+    return df_wide
+
+def get_merged_df(eia_spot_pet_df=fetch_eia_series_pet(), eia_spot_gas_df=fetch_eia_series_gas(), eia_stock_df=fetch_eia_stock(),fred_df=fetch_fred_series()):
+    df = pd.merge(left=eia_spot_pet_df, right=fred_df,left_index = True, right_index = True, how= 'inner')
     df = pd.merge(left=df, right=eia_stock_df, left_index = True, right_index = True, how = 'inner')
+    df = pd.merge(left=df, right= eia_spot_gas_df, left_index = True, right_index = True, how = 'inner' )
     return df
 
 

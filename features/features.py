@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 
 
-def compute_returns(df, series_ids= ['RBRTE','RWTC']):
+def compute_returns(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD']):
     df = df.copy()
     for id in series_ids:
         df[id + '_log_return'] = np.log(df[id]/ df[id].shift(1))
@@ -17,14 +17,14 @@ def series_diff(df, series_ids=['WCESTUS1']):
         df[id + '_w_change'] = df[id].diff()
     return df
 
-def lagged_features(df, series_ids= ['RBRTE','RWTC'], lags=[1,4,12]):
+def lagged_features(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD'], lags=[1,4,12]):
     df = df.copy()
     for id in series_ids:
         for lag in lags:
             df[id + f'{lag}_w_lag'] = df.shift(lag)
     return df
 
-def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return'], periods=[4,12]):
+def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return, RNGWWHD_log_return'], periods=[4,12]):
     df = df.copy()
     for id in series_ids:
         id = id.split("_")[0]
@@ -32,10 +32,21 @@ def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return'], periods=[
             df[id + f'_{period}_rol_vol'] = df[id].rolling(window=period,min_periods=1).std()
     return df
 
-def differentials(df, series_ids=['RBRTE', 'RWTC']):
+def differentials(df, series_ids=['RBRTE', 'RWTC','RNGWHHD']):
     df = df.copy()
     pairings = [(x,y) for i, x in enumerate(series_ids) for y in series_ids[i+1:]] 
     for pair in pairings:
         id_a , id_b = pair 
         df[f'{id_a}_{id_b}_diff'] = df[id_a] - df[id_b]
+    return df
+
+def rolling_z_scores(df, 
+                     series_ids=['RBRTE', 'RWTC', 'RNGWHHD'],
+                     window=63,
+                     min_periods=1):
+    df = df.copy()
+    for id in series_ids:
+      avg = df[id].rolling(window=window, min_periods=min_periods).mean()
+      dev = df[id].rolling(window=window, min_periods=min_periods).std()
+      df[id + '_rol_z_score'] = (df[id] - avg) / dev
     return df

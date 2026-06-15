@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
+from ../data.ingestion import get_merged_df
 import os
+
 
 
 def compute_returns(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD']):
@@ -21,10 +23,10 @@ def lagged_features(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD'], lags=[1,4,12]):
     df = df.copy()
     for id in series_ids:
         for lag in lags:
-            df[id + f'{lag}_w_lag'] = df.shift(lag)
+            df[id + f'{lag}_w_lag'] = df[id].shift(lag)
     return df
 
-def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return, RNGWWHD_log_return'], periods=[4,12]):
+def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return', 'RNGWHHD_log_return'], periods=[4,12]):
     df = df.copy()
     for id in series_ids:
         id = id.split("_")[0]
@@ -41,7 +43,7 @@ def differentials(df, series_ids=['RBRTE', 'RWTC','RNGWHHD']):
     return df
 
 def rolling_z_scores(df, 
-                     series_ids=['RBRTE', 'RWTC', 'RNGWHHD'],
+                     series_ids=['RBRTE_log_return','RWTC_log_return','RNGWHHD_log_return'],
                      window=63,
                      min_periods=1):
     df = df.copy()
@@ -49,4 +51,20 @@ def rolling_z_scores(df,
       avg = df[id].rolling(window=window, min_periods=min_periods).mean()
       dev = df[id].rolling(window=window, min_periods=min_periods).std()
       df[id + '_rol_z_score'] = (df[id] - avg) / dev
+    return df
+
+def feature_pipeline(df=get_merged_df()):
+    df = df.copy()
+    print("Computing log returns...")
+    df = compute_returns(df)
+    print("Computing week-on-week changes...")
+    df = series_diff(df)
+    print("Computing lagged values...")
+    df = lagged_features(df)
+    print("Computing rolling returns volatility...")
+    df = rolling_vol(df)
+    print("Computing computing commodity-to-commodity differences...")
+    df = differentials(df)
+    print("Computing rolling window z-scores...")
+    df = rolling_z_scores(df)
     return df

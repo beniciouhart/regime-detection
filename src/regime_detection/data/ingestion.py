@@ -101,8 +101,22 @@ def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pullin
     df_wide = df_wide.dropna()
     return df_wide
 
-def get_merged_df(eia_spot_pet_df=fetch_eia_series_pet(), eia_spot_gas_df=fetch_eia_series_gas(), eia_stock_df=fetch_eia_stock(),fred_df=fetch_fred_series()):
-    # Get and merge eia and fred data
+def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None, fred_df=None):
+    #Get data
+    if eia_spot_pet_df is None:
+        eia_spot_pet_df = fetch_eia_series_pet()
+    if eia_spot_gas_df is None:
+        eia_spot_gas_df = fetch_eia_series_gas()
+    if eia_stock_df is None:
+        eia_stock_df = fetch_eia_stock()
+    if fred_df is None:
+        fred_df = fetch_fred_series()
+
+    # Merge data
+
+
+
+
     df = pd.merge(left=eia_spot_pet_df, right=fred_df,left_index = True, right_index = True, how= 'inner')
     df = pd.merge(left=df, right=eia_stock_df, left_index = True, right_index = True, how = 'inner')
     df = pd.merge(left=df, right= eia_spot_gas_df, left_index = True, right_index = True, how = 'inner' )

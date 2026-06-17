@@ -53,7 +53,9 @@ def rolling_z_scores(df,
       df[id + '_rol_z_score'] = (df[id] - avg) / dev
     return df
 
-def feature_pipeline(df=get_merged_df()):
+def feature_pipeline(df=None):
+    if df is None:
+        df = get_merged_df()
     df = df.copy()
     print("Computing log returns...")
     df = compute_returns(df)

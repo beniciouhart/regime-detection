@@ -18,7 +18,7 @@ def fetch_eia_series_pet(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pu
     EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
 
     def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={id}" for id in series_ids]
+        text = [f"&facets[series][]={series}" for series in series_ids]
         return ''.join(text)
 
 
@@ -43,8 +43,8 @@ def fetch_fred_series(series_ids=['T10Y2Y','VIXCLS','DTWEXBGS'], #ID's of the se
     FRED_API_KEY = os.getenv('FRED_API_KEY')
     fred = Fred(api_key= FRED_API_KEY)
     series_dict = {}
-    for id in series_ids: # Create a dict with key as ID and values as the corresponding series
-        series_dict[id] = fred.get_series(series_id=id)
+    for series in series_ids: # Create a dict with key as ID and values as the corresponding series
+        series_dict[series] = fred.get_series(series_id=series)
 
     df = pd.DataFrame(series_dict) # Turn dictionary into a DF
     df.index = pd.to_datetime(df.index) # Convert index dtype to datetime
@@ -64,7 +64,7 @@ def fetch_eia_stock(series_ids=['WCESTUS1'], # ID's of series we're pulling (Wee
     EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
 
     def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={id}" for id in series_ids]
+        text = [f"&facets[series][]={series}" for series in series_ids]
         return ''.join(text)
 
     URL_BASE = f'https://api.eia.gov/v2/petroleum/stoc/wstk/data/?api_key={EIA_API_KEY}&frequency={frequency}&data[0]=value{series_line(series_ids)}&sort[0][column]=period&sort[0][direction]=desc&length={length}'
@@ -88,7 +88,7 @@ def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pullin
     EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
 
     def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={id}" for id in series_ids]
+        text = [f"&facets[series][]={series}" for series in series_ids]
         return ''.join(text)
     
 

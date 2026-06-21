@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 import os
 from fredapi import Fred
 
+import cloudscraper
+import re
+from datetime import datetime
+
 load_dotenv()
 
 def fetch_eia_series_pet(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pulling (Brent, WTI)
@@ -101,6 +105,8 @@ def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pullin
     df_wide = df_wide.dropna()
     return df_wide
 
+
+
 def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None, fred_df=None):
     #Get data
     if eia_spot_pet_df is None:
@@ -122,15 +128,18 @@ def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None,
     df = pd.merge(left=df, right= eia_spot_gas_df, left_index = True, right_index = True, how = 'inner' )
     df = df.copy().reset_index().sort_values('period')
 
-    # Get and merge opec meeting dates, and the time since a meeting (these are big events for the market)
+    # Get and merge OPEC, FOMC meeting dates, and the time since a meeting (these are big events for the market)
         
-    opec_dates = pd.read_csv('data/meetings.csv', parse_dates=['date']).sort_values('date')
+    opec_dates = pd.read_csv('data/opec_meetings.csv', parse_dates=['date']).sort_values('date')
+    fomc_dates = pd.read_csv('data/fomc_meetings.csv', parse_dates=['date']).sort_values('date')
     
     df = pd.merge_asof(df, opec_dates.assign(last_opec=opec_dates['date']),
                     left_on='period', right_on='date', direction='backward') #merge_asof used for timeseries data where the dates don't match, finds the closest date in the rightmost df and returns that value for all rows matches, here we use backward to get the most recent date, forward would get the soonest.
-    
+    df = pd.merge_asof(df, fomc_dates.assign(last_fomc=fomc_dates['date']), left_on='period', right_on='date', direction='backward')
     df['days_since_opec'] = (df['period'] - df['last_opec']).dt.days
-    df = df.drop(columns=['date', 'last_opec'])
+
+    df['days_since_fomc'] = (df['period'] - df['last_fomc']).dt.days
+    df = df.drop(columns=['date_x','date_y', 'last_fomc','last_opec'])
     
     return df.set_index('period')
 

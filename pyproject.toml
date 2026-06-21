@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "regime-detection"
+version = "0.1.0"
+description = "Regime-conditional VaR/CVaR for energy markets"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "numpy",
+    "requests",
+    "fredapi",
+    "python-dotenv",
+    "statsmodels",
+    "scikit-learn",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "black"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

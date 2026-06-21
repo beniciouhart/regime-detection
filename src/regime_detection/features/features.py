@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
 from regime_detection.data.ingestion import get_merged_df
-import os
-
 
 
 def compute_returns(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD']):
@@ -16,25 +13,24 @@ def compute_returns(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD']):
 def series_diff(df, series_ids=['WCESTUS1']):
     df = df.copy()
     for id in series_ids:
-        df[id + '1_w_lag'] = df[id].diff()
+        df[id + '_1_w_change'] = df[id].diff()
     return df
 
-def lagged_features(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD'], lags=[1,4,12]):
+def lagged_features(df, series_ids= ['RBRTE_log_return','RWTC_log_return', 'RNGWHHD_log_return', 'WCESTUS1_1_w_change'], lags=[1,4,12]):
     df = df.copy()
     for id in series_ids:
         for lag in lags:
-            df[id + f'{lag}_w_lag'] = df[id].shift(lag)
+            df[id + f'_{lag}_w_lag'] = df[id].shift(lag)
     return df
 
 def rolling_vol(df, series_ids=['RBRTE_log_return','RWTC_log_return', 'RNGWHHD_log_return'], periods=[4,12]):
     df = df.copy()
     for id in series_ids:
-        id = id.split("_")[0]
         for period in periods:
             df[id + f'_{period}_returns_rol_vol'] = df[id].rolling(window=period,min_periods=1).std()
     return df
 
-def differentials(df, series_ids=['RBRTE', 'RWTC','RNGWHHD']):
+def differentials(df, series_ids=['RBRTE', 'RWTC']):
     df = df.copy()
     pairings = [(x,y) for i, x in enumerate(series_ids) for y in series_ids[i+1:]] 
     for pair in pairings:
@@ -65,7 +61,7 @@ def feature_pipeline(df=None):
     df = lagged_features(df)
     print("Computing rolling returns volatility...")
     df = rolling_vol(df)
-    print("Computing computing commodity-to-commodity differences...")
+    print("Computing commodity-to-commodity differences...")
     df = differentials(df)
     print("Computing rolling window z-scores...")
     df = rolling_z_scores(df)

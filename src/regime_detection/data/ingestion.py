@@ -129,9 +129,11 @@ def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None,
     df = df.copy().reset_index().sort_values('period')
 
     # Get and merge OPEC, FOMC meeting dates, and the time since a meeting (these are big events for the market)
-        
-    opec_dates = pd.read_csv('data/opec_meetings.csv', parse_dates=['date']).sort_values('date')
-    fomc_dates = pd.read_csv('data/fomc_meetings.csv', parse_dates=['date']).sort_values('date')
+    
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    opec_dates = pd.read_csv(os.path.join(BASE_DIR, 'opec_meetings.csv'), parse_dates=['date']).sort_values('date')
+    fomc_dates = pd.read_csv(os.path.join(BASE_DIR, 'fomc_meetings.csv'), parse_dates=['date']).sort_values('date') 
     
     df = pd.merge_asof(df, opec_dates.assign(last_opec=opec_dates['date']),
                     left_on='period', right_on='date', direction='backward') #merge_asof used for timeseries data where the dates don't match, finds the closest date in the rightmost df and returns that value for all rows matches, here we use backward to get the most recent date, forward would get the soonest.
@@ -142,5 +144,6 @@ def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None,
     df = df.drop(columns=['date_x','date_y', 'last_fomc','last_opec'])
     
     return df.set_index('period')
+
 
 

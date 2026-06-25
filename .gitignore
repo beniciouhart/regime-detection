@@ -6,6 +6,8 @@ __pycache__/
 # C extensions
 *.so
 
+# Notebook where I document the things I learn thru this project
+*learnings.ipynb
 # Distribution / packaging
 .Python
 build/

@@ -16,10 +16,15 @@ dependencies = [
     "statsmodels",
     "scikit-learn",
     "streamlit",
+    "matplotlib",
+    "seaborn",
+    # used by scripts/build_meeting_dates.py to scrape FOMC/OPEC calendars
+    "cloudscraper",
+    "beautifulsoup4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "black"]
+dev = ["pytest", "ruff", "black", "ipykernel"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

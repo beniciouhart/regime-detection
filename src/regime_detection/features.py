@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from regime_detection.data.ingestion import get_merged_df
+from regime_detection.ingestion import get_merged_df
 
 
 def compute_returns(df, series_ids= ['RBRTE','RWTC', 'RNGWHHD']):

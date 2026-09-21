@@ -1,15 +1,15 @@
-import requests
-import pandas as pd
-import numpy as np
-from dotenv import load_dotenv
 import os
+from pathlib import Path
+
+import pandas as pd
+import requests
+from dotenv import load_dotenv
 from fredapi import Fred
 
-import cloudscraper
-import re
-from datetime import datetime
-
 load_dotenv()
+
+# CSVs live in data/ at the repo root, two levels up from src/regime_detection/
+DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
 
 def fetch_eia_series_pet(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pulling (Brent, WTI)
                           frequency= 'weekly',# Frequency of the spot prices, either daily, weekly, or monthly.
@@ -130,10 +130,8 @@ def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None,
 
     # Get and merge OPEC, FOMC meeting dates, and the time since a meeting (these are big events for the market)
     
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    opec_dates = pd.read_csv(os.path.join(BASE_DIR, 'opec_meetings.csv'), parse_dates=['date']).sort_values('date')
-    fomc_dates = pd.read_csv(os.path.join(BASE_DIR, 'fomc_meetings.csv'), parse_dates=['date']).sort_values('date') 
+    opec_dates = pd.read_csv(DATA_DIR / 'opec_meetings.csv', parse_dates=['date']).sort_values('date')
+    fomc_dates = pd.read_csv(DATA_DIR / 'fomc_meetings.csv', parse_dates=['date']).sort_values('date')
     
     df = pd.merge_asof(df, opec_dates.assign(last_opec=opec_dates['date']),
                     left_on='period', right_on='date', direction='backward') #merge_asof used for timeseries data where the dates don't match, finds the closest date in the rightmost df and returns that value for all rows matches, here we use backward to get the most recent date, forward would get the soonest.

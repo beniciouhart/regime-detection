@@ -21,6 +21,7 @@ dependencies = [
     # used by scripts/build_meeting_dates.py to scrape FOMC/OPEC calendars
     "cloudscraper",
     "beautifulsoup4",
+    "ruptures",
 ]
 
 [project.optional-dependencies]

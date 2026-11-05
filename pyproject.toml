@@ -23,6 +23,7 @@ dependencies = [
     "beautifulsoup4",
     "ruptures",
     "scipy",
+    "hmmlearn",
 ]
 
 [project.optional-dependencies]

@@ -1,3 +1,5 @@
+"""Data ingestion: EIA, FRED, and meeting-date merging."""
+
 import os
 from pathlib import Path
 
@@ -8,107 +10,134 @@ from fredapi import Fred
 
 load_dotenv()
 
-# CSVs live in data/ at the repo root, two levels up from src/regime_detection/
-DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
-
-def fetch_eia_series_pet(series_ids=['RBRTE', 'RWTC'], # ID's of series we're pulling (Brent, WTI)
-                          frequency= 'weekly',# Frequency of the spot prices, either daily, weekly, or monthly.
-                            length = 5000 # Timespan that we're pulling, max 5000 weeks
-                            ):
-    EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
-
-    def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={series}" for series in series_ids]
-        return ''.join(text)
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
-    URL_BASE = f"https://api.eia.gov/v2/petroleum/pri/spt/data/?api_key={EIA_API_KEY}&frequency={frequency}&data[0]=value{series_line(series_ids)}&sort[0][column]=period&sort[0][direction]=desc&length={length}"
-    response = requests.get(url= URL_BASE) # Make request to EIA API
-    data = response.json()
+# ---------------------------------------------------------------------------
+# EIA helpers
+# ---------------------------------------------------------------------------
 
-    df = pd.DataFrame(data['response']['data']).sort_index(ascending= False) # Extract data from JSON output
-    df['period'] = pd.to_datetime(df['period']) # Clean the period (date) to datetime type
-    df['value'] = pd.to_numeric(df['value'], errors= 'coerce') # Clean the value (spot price) to numeric
-    df = df[['period', 'value', 'series']] # Keep only relevant columns
+_EIA_ENDPOINTS = {
+    "petroleum_spot": "petroleum/pri/spt",
+    "natural_gas_futures": "natural-gas/pri/fut",
+    "petroleum_stock": "petroleum/stoc/wstk",
+}
 
-    df_wide = df.pivot(index='period', columns = 'series', values= 'value') # Create into pivot table, rows indexed by date, columns are each ticker, and values are spot prices
-    df_wide = df_wide.dropna()
-    return df_wide
 
-def fetch_fred_series(series_ids=['T10Y2Y','VIXCLS','DTWEXBGS'], #ID's of the series we want to pull, here 10Y-2Y spread, VIX, and DXY
-                      frequency = 'W-FRI'  # How frequent we want the samples to be. (day -> "D", weekly (Friday) -> "W-FRI", monthly -> "M", yearly -> "Y"
-                      ):
-    
+def fetch_eia_series(
+    series_ids: list[str],
+    endpoint: str = "petroleum_spot",
+    frequency: str = "weekly",
+    length: int = 5000,
+) -> pd.DataFrame:
+    """Fetch one or more EIA series and return a wide DataFrame indexed by period.
+
+    Parameters
+    ----------
+    series_ids : list[str]
+        EIA series identifiers, e.g. ``["RBRTE", "RWTC"]``.
+    endpoint : str
+        Key into ``_EIA_ENDPOINTS`` (petroleum_spot | natural_gas_futures | petroleum_stock).
+    frequency : str
+        "daily", "weekly", or "monthly".
+    length : int
+        Maximum number of records to return (EIA caps at 5000).
+    """
+    api_key = os.getenv("EIA_API_KEY")
+    if not api_key:
+        raise EnvironmentError("EIA_API_KEY not set in environment or .env")
+
+    path = _EIA_ENDPOINTS[endpoint]
+    facets = "".join(f"&facets[series][]={sid}" for sid in series_ids)
+    url = (
+        f"https://api.eia.gov/v2/{path}/data/"
+        f"?api_key={api_key}"
+        f"&frequency={frequency}"
+        f"&data[0]=value"
+        f"{facets}"
+        f"&sort[0][column]=period&sort[0][direction]=desc"
+        f"&length={length}"
+    )
+
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+
+    df = pd.DataFrame(data["response"]["data"])
+    df["period"] = pd.to_datetime(df["period"])
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df = df[["period", "value", "series"]]
+
+    df_wide = df.pivot(index="period", columns="series", values="value").dropna()
+    return df_wide.sort_index()
+
+
+# Convenience wrappers (preserve the old call signatures)
+
+def fetch_eia_series_pet(series_ids=None, frequency="weekly", length=5000):
+    return fetch_eia_series(
+        series_ids or ["RBRTE", "RWTC"],
+        endpoint="petroleum_spot",
+        frequency=frequency,
+        length=length,
+    )
+
+
+def fetch_eia_series_gas(series_ids=None, frequency="weekly", length=5000):
+    return fetch_eia_series(
+        series_ids or ["RNGWHHD"],
+        endpoint="natural_gas_futures",
+        frequency=frequency,
+        length=length,
+    )
+
+
+def fetch_eia_stock(series_ids=None, frequency="weekly", length=5000):
+    return fetch_eia_series(
+        series_ids or ["WCESTUS1"],
+        endpoint="petroleum_stock",
+        frequency=frequency,
+        length=length,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FRED
+# ---------------------------------------------------------------------------
+
+def fetch_fred_series(
+    series_ids: list[str] | None = None,
+    frequency: str = "W-FRI",
+) -> pd.DataFrame:
+    """Fetch series from FRED and resample to *frequency*."""
     load_dotenv()
-    FRED_API_KEY = os.getenv('FRED_API_KEY')
-    fred = Fred(api_key= FRED_API_KEY)
-    series_dict = {}
-    for series in series_ids: # Create a dict with key as ID and values as the corresponding series
-        series_dict[series] = fred.get_series(series_id=series)
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key:
+        raise EnvironmentError("FRED_API_KEY not set in environment or .env")
 
-    df = pd.DataFrame(series_dict) # Turn dictionary into a DF
-    df.index = pd.to_datetime(df.index) # Convert index dtype to datetime
-    df.index.name = 'period' # Convert index name to 'period' to match the EIA information
+    series_ids = series_ids or ["T10Y2Y", "VIXCLS", "DTWEXBGS"]
+    fred = Fred(api_key=api_key)
 
-    df = df.resample(rule=frequency).last() # Resample to keep only the days at the end of the week
+    series_dict = {sid: fred.get_series(series_id=sid) for sid in series_ids}
 
-    df = df.dropna() # Drop any NaNs
-
+    df = pd.DataFrame(series_dict)
+    df.index = pd.to_datetime(df.index)
+    df.index.name = "period"
+    df = df.resample(rule=frequency).last().dropna()
     return df
 
-def fetch_eia_stock(series_ids=['WCESTUS1'], # ID's of series we're pulling (Week-end US Crude Inventory)
-                          frequency= 'weekly',# Frequency of the spot prices, either daily, weekly, or monthly.
-                            length = 5000 # Timespan that we're pulling, max 5000 weeks
-                            ):
-    load_dotenv()
-    EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
 
-    def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={series}" for series in series_ids]
-        return ''.join(text)
+# ---------------------------------------------------------------------------
+# Merge
+# ---------------------------------------------------------------------------
 
-    URL_BASE = f'https://api.eia.gov/v2/petroleum/stoc/wstk/data/?api_key={EIA_API_KEY}&frequency={frequency}&data[0]=value{series_line(series_ids)}&sort[0][column]=period&sort[0][direction]=desc&length={length}'
-
-    response = requests.get(url= URL_BASE) # Make request to EIA API
-    data = response.json()
-
-    df = pd.DataFrame(data['response']['data']).sort_index(ascending= False)
-    df['period'] = pd.to_datetime(df['period']) # Clean the period to datetime type
-    df['value'] = pd.to_numeric(df['value'], errors= 'coerce') # Clean the value (spot price) to numeric
-    df = df[['period', 'value', 'series']]
-
-    df_wide = df.pivot(index='period', columns = 'series', values= 'value') # Create into pivot table
-    df_wide = df_wide.dropna()
-    return df_wide
-
-def fetch_eia_series_gas(series_ids = ["RNGWHHD"], # ID's of series we're pulling (Henry Hub)
-                         frequency= 'weekly', # Frequency of the spot prices, either daily, weekly, or monthly.
-                         length = 5000): # Timespan that we're pulling, max 5000 weeks
-    load_dotenv()
-    EIA_API_KEY = os.getenv("EIA_API_KEY") #API Key to pull this data
-
-    def series_line(series_ids) -> str: # Build the text used to specify what series we want
-        text = [f"&facets[series][]={series}" for series in series_ids]
-        return ''.join(text)
-    
-
-    URL_BASE = f"https://api.eia.gov/v2/natural-gas/pri/fut/data/?api_key={EIA_API_KEY}&frequency={frequency}&data[0]=value{series_line(series_ids)}&sort[0][column]=period&sort[0][direction]=desc&length={length}"
-    response = requests.get(url= URL_BASE) # Make request to EIA API
-    data = response.json()
-
-    df = pd.DataFrame(data['response']['data']).sort_index(ascending= False)
-    df['period'] = pd.to_datetime(df['period']) # Clean the period to datetime type
-    df['value'] = pd.to_numeric(df['value'], errors= 'coerce') # Clean the value (spot price) to numeric
-    df = df[['period', 'value', 'series']]
-
-    df_wide = df.pivot(index='period', columns = 'series', values= 'value') # Create into pivot table
-    df_wide = df_wide.dropna()
-    return df_wide
-
-
-
-def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None, fred_df=None):
-    #Get data
+def get_merged_df(
+    eia_spot_pet_df=None,
+    eia_spot_gas_df=None,
+    eia_stock_df=None,
+    fred_df=None,
+) -> pd.DataFrame:
+    """Pull all sources and merge into a single weekly panel."""
     if eia_spot_pet_df is None:
         eia_spot_pet_df = fetch_eia_series_pet()
     if eia_spot_gas_df is None:
@@ -118,30 +147,30 @@ def get_merged_df(eia_spot_pet_df=None, eia_spot_gas_df=None, eia_stock_df=None,
     if fred_df is None:
         fred_df = fetch_fred_series()
 
-    # Merge data
+    df = (
+        eia_spot_pet_df
+        .merge(fred_df, left_index=True, right_index=True, how="inner")
+        .merge(eia_stock_df, left_index=True, right_index=True, how="inner")
+        .merge(eia_spot_gas_df, left_index=True, right_index=True, how="inner")
+        .reset_index()
+        .sort_values("period")
+    )
 
+    # OPEC meeting dates
+    opec = pd.read_csv(DATA_DIR / "opec_meetings.csv", parse_dates=["date"]).sort_values("date")
+    df = pd.merge_asof(
+        df, opec.assign(last_opec=opec["date"]),
+        left_on="period", right_on="date", direction="backward",
+    )
+    df["days_since_opec"] = (df["period"] - df["last_opec"]).dt.days
 
+    # FOMC meeting dates
+    fomc = pd.read_csv(DATA_DIR / "fomc_meetings.csv", parse_dates=["date"]).sort_values("date")
+    df = pd.merge_asof(
+        df, fomc.assign(last_fomc=fomc["date"]),
+        left_on="period", right_on="date", direction="backward",
+    )
+    df["days_since_fomc"] = (df["period"] - df["last_fomc"]).dt.days
 
-
-    df = pd.merge(left=eia_spot_pet_df, right=fred_df,left_index = True, right_index = True, how= 'inner')
-    df = pd.merge(left=df, right=eia_stock_df, left_index = True, right_index = True, how = 'inner')
-    df = pd.merge(left=df, right= eia_spot_gas_df, left_index = True, right_index = True, how = 'inner' )
-    df = df.copy().reset_index().sort_values('period')
-
-    # Get and merge OPEC, FOMC meeting dates, and the time since a meeting (these are big events for the market)
-    
-    opec_dates = pd.read_csv(DATA_DIR / 'opec_meetings.csv', parse_dates=['date']).sort_values('date')
-    fomc_dates = pd.read_csv(DATA_DIR / 'fomc_meetings.csv', parse_dates=['date']).sort_values('date')
-    
-    df = pd.merge_asof(df, opec_dates.assign(last_opec=opec_dates['date']),
-                    left_on='period', right_on='date', direction='backward') #merge_asof used for timeseries data where the dates don't match, finds the closest date in the rightmost df and returns that value for all rows matches, here we use backward to get the most recent date, forward would get the soonest.
-    df = pd.merge_asof(df, fomc_dates.assign(last_fomc=fomc_dates['date']), left_on='period', right_on='date', direction='backward')
-    df['days_since_opec'] = (df['period'] - df['last_opec']).dt.days
-
-    df['days_since_fomc'] = (df['period'] - df['last_fomc']).dt.days
-    df = df.drop(columns=['date_x','date_y', 'last_fomc','last_opec'])
-    
-    return df.set_index('period')
-
-
-
+    df = df.drop(columns=["date_x", "date_y", "last_fomc", "last_opec"])
+    return df.set_index("period")

@@ -39,37 +39,21 @@ def run_crops(signal, model="rbf", beta_min=None, beta_max=None):
     return results
 
 
-def select_plateau_changepoints(crops_results, exclude_terminal=True):
-    """Pick the changepoint set from the widest penalty plateau.
-
-    Parameters
-    ----------
-    crops_results : dict[float, list[int]]
-        Output of :func:`run_crops`.
-    exclude_terminal : bool
-        Drop the final index (PELT's end-of-series marker).
-
-    Returns
-    -------
-    list[int]  Sorted changepoint indices from the widest plateau.
-    """
-    # Group penalties by number of changepoints
-    by_n = {}
-    for pen in sorted(crops_results):
-        cpts = crops_results[pen]
-        n_cpts = len(cpts) - (1 if exclude_terminal else 0)
-        by_n.setdefault(n_cpts, []).append(pen)
-
-    # Widest plateau = largest range of penalties with the same count
-    best_n = max(by_n, key=lambda k: max(by_n[k]) - min(by_n[k]))
-    # Take the changepoints from the middle of the plateau
-    mid_pen = sorted(by_n[best_n])[len(by_n[best_n]) // 2]
-    cpts = sorted(crops_results[mid_pen])
-
-    if exclude_terminal:
-        cpts = cpts[:-1]  # drop PELT's terminal index
-
-    return cpts
+def select_plateau_changepoints(crops_results, min_cpts = 1):
+    """Pick changepoints from the widest penalty plateau (log scale), ignoring 0-changepoint solutions."""
+    pens = sorted(crops_results) # Sort the crops results by their penalty value 
+    counts = [len(crops_results[p]) - 1 for p in pens] # Returns the number of changepoint indices for the given penalty (-1 since they always include 0)
+    best_pen, best_width, i = None, -1, 0 
+    while i < len(pens): # Loop through each penalty
+        j = i
+        while j + 1 < len(pens) and counts[j + 1] == counts[i]: # Keep increasing the index while it's within bounds and the number of changepoints remains the same. 
+            j += 1
+        right = pens[j + 1] if j + 1 < len(pens) else pens[j] # Pick the penalty associated with the first time the number of changepoints changes
+        width = np.log(right) - np.log(pens[i]) # Get the difference in penalties between the first time the changepoints changed and the initial penalty 
+        if counts[i] > min_cpts and width > best_width: # If more than 1 changepoint and the width is the highest we've seen, set best penalty and best width
+            best_pen, best_width = pens[(i + j) // 2], width
+        i = j + 1
+    return sorted(crops_results[best_pen])[:-1]
 
 
 def label_regimes(df, changepoints):

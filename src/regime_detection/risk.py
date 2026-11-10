@@ -13,7 +13,7 @@ def rolling_var(df, series_col, window, quantile=0.05):
 
     Returns a Series of the rolling *quantile* of *series_col*.
     """
-    return df[series_col].rolling(window).quantile(quantile)
+    return df[series_col].rolling(window).quantile(quantile).shift(1)
 
 
 def add_rolling_var_columns(df, windows=None, quantile=0.05):
@@ -91,25 +91,28 @@ def unconditional_risk(df, quantile=0.05):
 # ---------------------------------------------------------------------------
 # Breach rates
 # ---------------------------------------------------------------------------
-
-def compute_breach_rates(df, windows=None):
+def compute_breach_rates(df, windows = None):
     """Compute unconditional breach rates for rolling-window VaR.
 
     Returns
     -------
     pd.DataFrame with columns: ticker, window, breach_rate.
     """
-    windows = windows or [52, 78, 104]
+    windows = windows or [52,78,104]
     tickers = ["RWTC", "RBRTE", "RNGWHHD"]
-    return_cols = {t: f"{t}_log_return_stationary" for t in tickers}
     rows = []
-    for ticker in tickers:
+    for ticker in tickers : 
+        ret_col  = f"{ticker}_log_return_stationary"
         for w in windows:
             var_col = f"{ticker}_{w}_week_var"
-            breaches = df[return_cols[ticker]] < df[var_col]
+            valid = df[[ret_col, var_col]].dropna()
+            
+            breaches = valid[ret_col] < valid[var_col]
             rows.append({
-                "ticker": ticker,
+                "ticker": ticker, 
                 "window": w,
-                "breach_rate": breaches.sum() / breaches.count(),
-            })
+                "n_obs":len(valid),
+                "n_breaches": int(breaches.sum()),
+                "breach_rate": breaches.mean()            
+                })
     return pd.DataFrame(rows)

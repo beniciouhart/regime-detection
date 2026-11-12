@@ -1,26 +1,132 @@
-# regime-detection
+# When Does Historical VaR Fail? A Weekly Backtest on Energy Markets
 
-Regime-conditional VaR/CVaR pipeline for energy markets (WTI, Brent, Henry Hub) using macro indicators (10Y-2Y yield spread, DXY, VIX).
+Rolling historical-simulation Value-at-Risk (VaR) for WTI crude, Brent crude and Henry Hub natural gas, backtested over Mar 2007 to Oct 2026. The project tests whether the overall breach rate is right, and whether breaches **cluster** in high-volatility periods.
 
-## Layout
+> **Status:** v1.0 in progress. Numbers marked *preliminary* will change before release.
+
+---
+
+## Question
+
+A 5% VaR should be breached about 1 week in 20. Historical VaR estimates it from a trailing window of past returns, which assumes the recent past looks like next week. Energy markets move between calm and turbulent stretches, so:
+
+1. Does rolling historical VaR get the overall 5% breach rate right?
+2. Are breaches spread evenly over time, or do they bunch up when volatility is high?
+
+---
+
+## Key results
+
+> TODO (Ben): replace with final numbers and a 3-sentence summary in your own words once the backtest table and bucket tables are done.
+
+**Breach rates of rolling 5% VaR** *(preliminary)*
+
+| Series | 52-week window | 78-week window | 104-week window |
+| --- | --- | --- | --- |
+| WTI | 7.4% | 6.8% | 6.2% |
+| Brent | 7.3% | 7.3% | 6.7% |
+| Henry Hub | 6.8% | 6.6% | 6.2% |
+
+- Every series and window breaches above the 5% target.
+- Kupiec rejects a 5% breach rate at the 52 and 78-week windows for all three series.
+- Longer windows breach less.
+
+**Breach clustering (Christoffersen test):** TODO
+
+**Breach rate by volatility bucket:** TODO (table: calm / low / high / wild, full-sample and rolling versions)
+
+![Brent volatility buckets](figures/brent_vol_buckets.png)
+
+> TODO (Ben): save the figure to `figures/` with `plt.savefig("figures/brent_vol_buckets.png", dpi=150, bbox_inches="tight")`.
+
+---
+
+## Data
+
+| Source | Series | Use |
+| --- | --- | --- |
+| EIA | WTI spot (RWTC), Brent spot (RBRTE), Henry Hub spot (RNGWHHD) | Returns, VaR |
+| EIA | US crude inventories (WCESTUS1) | Regression appendix |
+| FRED | 10Y-2Y spread (T10Y2Y), VIX (VIXCLS), broad dollar index (DTWEXBGS) | Regression appendix |
+
+Weekly frequency, Friday-aligned, about 1,000 observations.
+
+---
+
+## Method
+
+1. **Returns.** Weekly log returns. ADF and KPSS tests confirm they are stationary.
+2. **Return characteristics.** Skewness, excess kurtosis, and Ljung-Box tests on squared returns, to check for fat tails and volatility clustering before testing VaR.
+3. **Rolling historical VaR.** The 5th percentile of the previous 52, 78 or 104 weekly returns. Week *t*'s VaR uses only weeks up to *t-1*, so every week is an out-of-sample forecast (walk-forward backtest). No separate train/test split is needed.
+4. **Backtests.**
+   - *Kupiec proportion-of-failures test:* is the breach rate consistent with 5%?
+   - *Christoffersen independence test:* is a breach more likely right after another breach?
+5. **Volatility buckets.** Each week is labelled calm, low, high or wild by the quartile of Brent's trailing 12-week volatility (previous weeks only). Breach rates are compared across buckets.
+   - Main version: quartile cutoffs from the full sample.
+   - Robustness version: cutoffs from an expanding window, so labels use only data available at the time.
+6. **PELT changepoints** (descriptive only). Segments the sample into broad volatility eras for context.
+
+---
+
+## A note on April 2020
+
+WTI's raw statistics are dominated by two weeks. The week ending 2020-04-24 had a log return of -1.80, followed by a +1.55 rebound. COVID lockdowns collapsed demand, storage at Cushing, Oklahoma filled up, and the expiring futures contract went negative. Brent, a seaborne benchmark, had no equivalent storage squeeze.
+
+| WTI | With April 2020 | Without those 2 weeks | Brent (for comparison) |
+| --- | --- | --- | --- |
+| Excess kurtosis | 255.4 | 9.8 | 10.4 |
+| Annualized vol | 64% | 35% | 36% |
+
+These weeks are **kept** in the VaR backtest because the loss was real. They are why the volatility buckets are built on Brent rather than WTI.
+
+---
+
+## Limitations
+
+- **Full-sample information.** The main volatility-bucket cutoffs and the PELT segmentation use the whole sample, so they describe where breaches happened rather than forecast them. The rolling-bucket version addresses this for the buckets.
+- **One segmentation series.** Buckets come from Brent's volatility and are applied to all three series. Henry Hub's volatility follows its own seasonal and weather-driven pattern.
+- **Weekly data.** Weekly data gives about 50 to 70 breaches per series, so the backtests have limited power.
+- **Historical simulation only.** No volatility model (EWMA, GARCH) is compared yet.
+
+---
+
+## Future work
+
+- **GARCH or EWMA VaR** as a benchmark in the same backtest table, to test whether a model that adapts to volatility removes the clustering.
+- **Regime-aware VaR forecast** using a hidden Markov model with filtered (real-time) state probabilities, evaluated on a held-out period.
+- Daily data for more breaches and more test power.
+
+---
+
+## Appendix: macro drivers
+
+OLS regressions of weekly returns on inventory changes, VIX, the yield curve and the dollar index (HAC standard errors) explain little of the variation (R² of 0.02 to 0.09). Rolling regressions show the inventory coefficient is unstable over time, which motivated looking at volatility regimes.
+
+> TODO (Ben): one sentence on what you take from this, in your own words.
+
+---
+
+## Repository layout
 
 ```
 data/
-  fomc_meetings.csv          FOMC meeting dates
-  opec_meetings.csv          OPEC meeting dates
+  fomc_meetings.csv, opec_meetings.csv   Event calendars
 notebooks/
-  demo.ipynb                 End-to-end analysis (orchestration only — all logic lives in modules)
+  demo.ipynb                 Full analysis (logic lives in src/)
 scripts/
   build_meeting_dates.py     Scrapes FOMC/OPEC calendars into data/
 src/regime_detection/
-  ingestion.py               EIA + FRED API pulls, merged into one weekly panel
-  features.py                Log returns, diffs, lags, rolling volatility, cross-commodity spreads
-  stationarity.py            ADF / KPSS joint classification and transform pipeline
-  regression.py              OLS + HAC, Rolling OLS, Ljung-Box, Durbin-Watson diagnostics
-  changepoints.py            PELT changepoint detection with CROPS penalty search, regime labeling
-  risk.py                    Rolling VaR, regime-conditional VaR/CVaR, breach rates
-  backtest.py                Kupiec proportion-of-failures LR test
+  ingestion.py               EIA + FRED pulls, merged weekly panel
+  features.py                Log returns, diffs, lags, rolling volatility
+  stationarity.py            ADF / KPSS classification and transforms
+  regression.py              OLS + HAC, rolling OLS, residual diagnostics
+  changepoints.py            PELT with CROPS penalty search
+  risk.py                    Rolling VaR, VaR/CVaR tables, breach rates
+  backtest.py                Kupiec and Christoffersen tests, backtest table
+  hmm.py                     Gaussian HMM (experimental, not used in v1.0)
 ```
+
+---
 
 ## Setup
 
@@ -28,23 +134,11 @@ src/regime_detection/
 uv venv && uv pip install -e ".[dev]"
 ```
 
-Put your API keys in a `.env` at the repo root:
+Create a `.env` file at the repo root:
 
 ```
 EIA_API_KEY=...
 FRED_API_KEY=...
 ```
 
-## Usage
-
-```python
-from regime_detection.ingestion import get_merged_df
-from regime_detection.features import feature_pipeline
-from regime_detection.stationarity import stationarity_pipeline
-from regime_detection.regression import fit_commodity_models, fit_rolling_commodity_models
-from regime_detection.changepoints import run_crops, select_plateau_changepoints, label_regimes
-from regime_detection.risk import add_rolling_var_columns, regime_conditional_risk
-from regime_detection.backtest import kupiec_regime_conditional, kupiec_unconditional
-```
-
-Or run `notebooks/demo.ipynb` for the full pipeline.
+Then open `notebooks/demo.ipynb` and run all cells.

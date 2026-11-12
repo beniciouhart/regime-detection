@@ -101,3 +101,26 @@ def kupiec_unconditional(df, windows=None, quantile=0.05):
                 "reject_H0": pval < 0.05 if not np.isnan(pval) else None,
             })
     return pd.DataFrame(rows)
+
+def christoffersen_independence(breaches):
+    """Run Christoffersen Independence Test on binary breach series (0 if no VaR breach, 1 if VaR breach).
+
+    Returns
+    -------
+    Likelihood Ratio Test Statistic, P-Value, Prob. breach given prev. week didn't breach VaR, Prob. breach given prev. week breached VaR
+    """
+
+
+    b = np.asarray(breaches, dtype=int)
+    prev, curr = b[:-1], b[1:]
+    n00 = np.sum((prev == 0) & (curr == 0))  
+    n01 = np.sum((prev == 0) & (curr == 1))
+    n10 = np.sum((prev == 1) & (curr == 0))
+    n11 = np.sum((prev == 1) & (curr == 1))
+    pi0 = n01 / (n00 + n01) # ratio of weeks with breach given previous didn't breach
+    pi1 = n11 / (n10 + n11) if (n10 + n11) > 0 else 0.0 # ratio of weeks with breach given previous week breached
+    pi = (n01 + n11) / len(prev)
+    def ll(p, zeros, ones):
+        return (zeros * np.log(1 - p) if zeros else 0) + (ones * np.log(p) if ones else 0)
+    lr = -2 * (ll(pi, n00 + n10, n01 + n11) - ll(pi0, n00, n01) - ll(pi1, n10, n11))
+    return lr, chi2.sf(lr, df=1), pi0, pi1

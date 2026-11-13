@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "regime-detection"
 version = "0.1.0"
-description = "Regime-conditional VaR/CVaR for energy markets"
+description = "Backtesting rolling historical VaR on energy markets"
 requires-python = ">=3.11"
 dependencies = [
     "pandas",

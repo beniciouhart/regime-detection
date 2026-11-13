@@ -1,4 +1,4 @@
-"""PELT changepoint detection, CROPS penalty search, and regime labeling."""
+"""PELT changepoint detection, CROPS penalty search, regime labeling, and volatility buckets."""
 
 import numpy as np
 import pandas as pd
@@ -88,3 +88,26 @@ def regime_summary(df):
             f"{rid:<10} {str(subset.index[0].date()):<15} "
             f"{str(subset.index[-1].date()):<15} {len(subset):<10}"
         )
+
+
+BUCKETS = ["calm", "low", "high", "wild"]
+
+
+def vol_buckets(vol, min_periods=104):
+    """Label each week calm / low / high / wild by the quartile of last week's vol.
+
+    The percentile is taken over an expanding window, so each label only uses
+    data available at the time. The first *min_periods* weeks get no label.
+    """
+    pct = vol.shift(1).expanding(min_periods=min_periods).rank(pct=True)
+    return pd.cut(pct, [0, 0.25, 0.5, 0.75, 1], labels=BUCKETS, include_lowest=True)
+
+
+def add_vol_bucket_columns(df, tickers=None, vol_window=12, min_periods=104):
+    """Add a ``{ticker}_vol_bucket`` column for each series, built from its own rolling vol."""
+    tickers = tickers or ["RWTC", "RBRTE", "RNGWHHD"]
+    df = df.copy()
+    for t in tickers:
+        vol = df[f"{t}_log_return_{vol_window}_returns_rol_vol"]
+        df[f"{t}_vol_bucket"] = vol_buckets(vol, min_periods)
+    return df

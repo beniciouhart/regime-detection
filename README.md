@@ -33,7 +33,7 @@ A 5% VaR should be breached about 1 week in 20. Historical VaR estimates it from
 
 **Breach clustering (Christoffersen test):** TODO
 
-**Breach rate by volatility bucket:** TODO (table: calm / low / high / wild, full-sample and rolling versions)
+**Breach rate by volatility bucket:** TODO (table: calm / low / high / wild, each series on its own volatility)
 
 ![Brent volatility buckets](figures/brent_vol_buckets.png)
 
@@ -61,9 +61,7 @@ Weekly frequency, Friday-aligned, about 1,000 observations.
 4. **Backtests.**
    - *Kupiec proportion-of-failures test:* is the breach rate consistent with 5%?
    - *Christoffersen independence test:* is a breach more likely right after another breach?
-5. **Volatility buckets.** Each week is labelled calm, low, high or wild by the quartile of Brent's trailing 12-week volatility (previous weeks only). Breach rates are compared across buckets.
-   - Main version: quartile cutoffs from the full sample.
-   - Robustness version: cutoffs from an expanding window, so labels use only data available at the time.
+5. **Volatility buckets.** Each series gets its own labels. A week is calm, low, high or wild depending on which quartile last week's 12-week volatility falls in, compared with that series' history up to that point (expanding window). Labels only use data available at the time, so the first two years (most of 2008) have no label. Breach rates are compared across buckets.
 6. **PELT changepoints** (descriptive only). Segments the sample into broad volatility eras for context.
 
 ---
@@ -77,14 +75,14 @@ WTI's raw statistics are dominated by two weeks. The week ending 2020-04-24 had 
 | Excess kurtosis | 255.4 | 9.8 | 10.4 |
 | Annualized vol | 64% | 35% | 36% |
 
-These weeks are **kept** in the VaR backtest because the loss was real. They are why the volatility buckets are built on Brent rather than WTI.
+These weeks are **kept** in the VaR backtest because the loss was real. They also wreck PELT on WTI's volatility, which is part of why PELT is only used as a rough description.
 
 ---
 
 ## Limitations
 
-- **Full-sample information.** The main volatility-bucket cutoffs and the PELT segmentation use the whole sample, so they describe where breaches happened rather than forecast them. The rolling-bucket version addresses this for the buckets.
-- **One segmentation series.** Buckets come from Brent's volatility and are applied to all three series. Henry Hub's volatility follows its own seasonal and weather-driven pattern.
+- **PELT uses the full sample.** The PELT eras describe where breaches happened, they don't forecast. The volatility buckets avoid this by using an expanding window.
+- **Uneven buckets.** Expanding-window quartiles don't split the sample 25/25/25/25, and the first two years (including most of 2008) have no bucket.
 - **Weekly data.** Weekly data gives about 50 to 70 breaches per series, so the backtests have limited power.
 - **Historical simulation only.** No volatility model (EWMA, GARCH) is compared yet.
 
@@ -120,9 +118,9 @@ src/regime_detection/
   features.py                Log returns, diffs, lags, rolling volatility
   stationarity.py            ADF / KPSS classification and transforms
   regression.py              OLS + HAC, rolling OLS, residual diagnostics
-  changepoints.py            PELT with CROPS penalty search
+  changepoints.py            PELT with CROPS penalty search, volatility buckets
   risk.py                    Rolling VaR, VaR/CVaR tables, breach rates
-  backtest.py                Kupiec and Christoffersen tests, backtest table
+  backtest.py                Kupiec and Christoffersen tests, backtest table, breach rate by group
   hmm.py                     Gaussian HMM (experimental, not used in v1.0)
 ```
 

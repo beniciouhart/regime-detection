@@ -17,7 +17,7 @@ A 5% VaR should be breached about 1 week in 20. Historical VaR estimates it from
 
 ## Key results
 
-> TODO (Ben): replace with final numbers and a 3-sentence summary in your own words once the backtest table and bucket tables are done.
+> TODO : replace with final numbers and a 3-sentence summary once the backtest table and bucket tables are done.
 
 **Breach rates of rolling 5% VaR** *(preliminary)*
 
@@ -37,7 +37,7 @@ A 5% VaR should be breached about 1 week in 20. Historical VaR estimates it from
 
 ![Brent volatility buckets](figures/brent_vol_buckets.png)
 
-> TODO (Ben): save the figure to `figures/` with `plt.savefig("figures/brent_vol_buckets.png", dpi=150, bbox_inches="tight")`.
+> TODO : save the figure to `figures/` with `plt.savefig("figures/brent_vol_buckets.png", dpi=150, bbox_inches="tight")`.
 
 ---
 
@@ -100,7 +100,7 @@ These weeks are **kept** in the VaR backtest because the loss was real. They als
 
 OLS regressions of weekly returns on inventory changes, VIX, the yield curve and the dollar index (HAC standard errors) explain little of the variation (R² of 0.02 to 0.09). Rolling regressions show the inventory coefficient is unstable over time, which motivated looking at volatility regimes.
 
-> TODO (Ben): one sentence on what you take from this, in your own words.
+> TODO : one sentence on this.
 
 ---
 

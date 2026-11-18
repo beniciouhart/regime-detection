@@ -59,6 +59,10 @@ def christoffersen_independence(breaches):
     lr = -2 * (ll(pi, n00 + n10, n01 + n11) - ll(pi0, n00, n01) - ll(pi1, n10, n11))
     return lr, chi2.sf(lr, df=1), pi0, pi1
 
+def christoffersen_cc(lr_pof, lr_ind):
+    """Conditional Coverage Test: LR_pof + LR_ind ~ chisq(2)"""
+    lr_cc = lr_ind + lr_pof
+    return lr_cc, chi2.sf(lr_cc, df=2)
 
 def backtest_table(df, windows=None, quantile=0.05):
     """Kupiec + Christoffersen for every series and rolling VaR window.
@@ -69,7 +73,7 @@ def backtest_table(df, windows=None, quantile=0.05):
     Returns
     -------
     pd.DataFrame with columns: series, window, n_obs, n_breaches, breach_rate,
-    kupiec_p, christoffersen_p, p_breach_after_none (pi0),
+    kupiec_p, independence_p, christoffersen_p, p_breach_after_none (pi0),
     p_breach_after_breach (pi1).
     """
     windows = windows or [52, 78, 104]
@@ -79,13 +83,15 @@ def backtest_table(df, windows=None, quantile=0.05):
         for w in windows:
             var = f"{t}_{w}_week_var"
             valid = df[[ret, var]].dropna()  # NaNs only at the start (VaR warm-up), so the weeks stay consecutive
-            hits = (valid[ret] < valid[var]).astype(int)
-            _, p_uc, rate = kupiec_test(len(hits), int(hits.sum()), quantile)
-            _, p_ind, pi0, pi1 = christoffersen_independence(hits)
+            breaches = (valid[ret] < valid[var]).astype(int)
+            lr_pof, p_uc, rate = kupiec_test(len(breaches), int(breaches.sum()), quantile)
+            lr_ind, p_ind, pi0, pi1 = christoffersen_independence(breaches)
+            _, p_cc = christoffersen_cc(lr_pof, lr_ind)
             rows.append({
-                "series": t, "window": w, "n_obs": len(hits),
-                "n_breaches": int(hits.sum()), "breach_rate": rate,
-                "kupiec_p": p_uc, "christoffersen_p": p_ind,
+                "series": t, "window": w, "n_obs": len(breaches),
+                "n_breaches": int(breaches.sum()), "breach_rate": rate,
+                "kupiec_p": p_uc, "independence_p": p_ind,
+                "christoffersen_p": p_cc,
                 "p_breach_after_none": pi0, "p_breach_after_breach": pi1,
             })
     return pd.DataFrame(rows)
